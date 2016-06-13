@@ -1,0 +1,100 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            name = "forge"
+            url = "http://files.minecraftforge.net/maven"
+        }
+        maven {
+            name = "sonatype"
+            url = "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:1.2-SNAPSHOT'
+    }
+}
+
+apply plugin: "forge"
+
+// define the properties file
+ext.configFile = file "build.properties"
+
+configFile.withReader {
+    // read config.  it shall from now on be referenced as simply config or as project.config
+    def prop = new Properties()
+    prop.load(it)
+    project.ext.config = new ConfigSlurper().parse prop
+}
+
+repositories {
+    ivy {
+        url "http://bspk.rs/MC"
+        layout "pattern", {
+            artifact "[module]/deobf/%5B${config.minecraft_version}%5D[module]-deobf-[revision].[ext]"
+            artifact "[module]/deobf/[${config.minecraft_version}][module]-deobf-[revision].[ext]"
+        }
+    }
+}
+
+dependencies {
+    compile name: 'bspkrsCore', version: "${config.bscore_version}", ext: 'jar'
+}
+
+group = config.group_name
+version = config.mod_version
+archivesBaseName = "[${config.minecraft_version}]${config.mod_id}"
+
+minecraft {
+    version = config.minecraft_version + "-" + config.forge_version // grab latest forge
+    mappings = config.mappings_version
+    runDir = "run"
+    replace '@MOD_VERSION@', version
+    replace '@BSCORE_VERSION@', config.bscore_version
+}
+
+processResources {
+    // replace stuff in the files we want.
+    from(sourceSets.main.resources.srcDirs) {
+        include '**/*.info'
+        include '**/*.properties'
+
+        // replaces
+        expand ([
+            'mod_version': version,
+            'bscore_version': config.bscore_version,
+            'bscore_jar': "[${config.minecraft_version}]bspkrsCore-universal-${config.bscore_version}.jar",
+            'pattern': "\\\\[.+?\\\\](\\\\w+).*?([\\\\d\\\\.]+)[-\\\\w]*\\\\.[^\\\\d]+",
+            'forge_version': config.forge_version,
+            'minecraft_version': config.minecraft_version
+        ])
+    }
+
+    // copy everything else, thats we didnt do before
+    from(sourceSets.main.resources.srcDirs) {
+        exclude '**/*.info'
+        exclude '**/*.properties'
+    }
+}
+
+// change the name of my obfuscated jar
+jar {
+    appendix = config.appendix
+}
+
+// add a source jar
+task sourceJar(type: Jar) {
+    from sourceSets.main.allSource
+    appendix = 'src'
+}
+
+// because the normal output has been made to be obfuscated
+task deobfJar(type: Jar) {
+    from sourceSets.main.output
+    appendix = 'deobf'
+}
+
+artifacts {
+    archives sourceJar
+    archives deobfJar
+}
